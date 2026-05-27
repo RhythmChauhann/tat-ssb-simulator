@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>TAT SSB Simulator</title>
+
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<style>
+
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+body{
+  font-family:Arial,sans-serif;
+  background:linear-gradient(135deg,#0f172a,#1e293b);
+  color:white;
+  overflow:hidden;
+}
+
+/* TOPBAR */
+
+.topbar{
+  height:80px;
+  width:100%;
+
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+
+  padding:0 25px;
+
+  background:rgba(255,255,255,0.06);
+
+  backdrop-filter:blur(12px);
+
+  border-bottom:1px solid rgba(255,255,255,0.08);
+}
+
+.title{
+  font-size:30px;
+  font-weight:bold;
+}
+
+.controls{
+  display:flex;
+  gap:15px;
+}
+
+button{
+  padding:12px 22px;
+
+  border:none;
+  border-radius:12px;
+
+  cursor:pointer;
+
+  font-weight:bold;
+  font-size:15px;
+
+  transition:0.3s;
+}
+
+button:hover{
+  transform:translateY(-2px);
+}
+
+#startBtn{
+  background:#38bdf8;
+  color:white;
+}
+
+#skipBtn{
+  background:#ef4444;
+  color:white;
+}
+
+#stopBtn{
+  background:#f59e0b;
+  color:white;
+}
+
+/* MAIN */
+
+.main{
+  width:100%;
+  height:calc(100vh - 80px);
+
+  display:flex;
+}
+
+/* VIEWER */
+
+.viewer{
+  width:75%;
+  height:100%;
+
+  position:relative;
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+
+  overflow:hidden;
+}
+
+.viewer::before{
+  content:"";
+
+  position:absolute;
+
+  width:500px;
+  height:500px;
+
+  border-radius:50%;
+
+  background:rgba(59,130,246,0.15);
+
+  filter:blur(120px);
+
+  animation:float 6s infinite alternate;
+}
+
+@keyframes float{
+
+  from{
+    transform:translate(-100px,-50px);
+  }
+
+  to{
+    transform:translate(100px,50px);
+  }
+
+}
+
+canvas{
+  max-width:92%;
+  max-height:92%;
+
+  border-radius:20px;
+
+  background:white;
+
+  border:3px solid rgba(255,255,255,0.12);
+
+  box-shadow:0 0 40px rgba(0,0,0,0.5);
+
+  z-index:2;
+
+  animation:fadeIn 0.5s ease;
+}
+
+@keyframes fadeIn{
+
+  from{
+    opacity:0;
+    transform:scale(0.95);
+  }
+
+  to{
+    opacity:1;
+    transform:scale(1);
+  }
+
+}
+
+/* VIEWER MESSAGE */
+
+.viewerMessage{
+  position:absolute;
+
+  width:100%;
+  height:100%;
+
+  display:flex;
+  justify-content:center;
+  align-items:center;
+
+  text-align:center;
+
+  font-size:65px;
+  font-weight:bold;
+
+  letter-spacing:5px;
+
+  color:rgba(255,255,255,0.15);
+
+  z-index:1;
+
+  animation:pulse 2s infinite;
+}
+
+@keyframes pulse{
+
+  0%{
+    opacity:0.3;
+  }
+
+  50%{
+    opacity:1;
+  }
+
+  100%{
+    opacity:0.3;
+  }
+
+}
+
+/* SIDEBAR */
+
+.sidebar{
+  width:25%;
+  height:100%;
+
+  padding:25px;
+
+  overflow-y:auto;
+
+  background:rgba(255,255,255,0.06);
+
+  backdrop-filter:blur(12px);
+
+  border-left:1px solid rgba(255,255,255,0.08);
+
+  display:flex;
+  flex-direction:column;
+}
+
+.statusCard{
+  background:rgba(255,255,255,0.08);
+
+  border-radius:20px;
+
+  padding:22px;
+
+  margin-bottom:20px;
+}
+
+.statusTitle{
+  font-size:14px;
+
+  color:#94a3b8;
+
+  margin-bottom:10px;
+
+  text-transform:uppercase;
+}
+
+.statusValue{
+  font-size:24px;
+  font-weight:bold;
+
+  word-wrap:break-word;
+}
+
+.timerBox{
+  text-align:center;
+
+  font-size:70px;
+  font-weight:bold;
+
+  color:#38bdf8;
+}
+
+.menuBtn{
+  width:100%;
+  margin-bottom:20px;
+}
+
+/* REVIEW PANEL */
+
+#reviewContainer{
+  display:none;
+  flex-direction:column;
+  gap:15px;
+
+  overflow-y:auto;
+}
+
+.logCard{
+  background:rgba(255,255,255,0.08);
+
+  border-radius:16px;
+
+  padding:12px;
+}
+
+.logCard p{
+  margin-bottom:10px;
+  font-weight:bold;
+}
+
+.log-image{
+  width:100%;
+  border-radius:12px;
+
+  cursor:pointer;
+
+  transition:0.25s;
+}
+
+.log-image:hover{
+  transform:scale(1.03);
+  opacity:0.85;
+}
+
+/* WATERMARK */
+
+#watermark{
+  position:fixed;
+
+  bottom:10px;
+  right:15px;
+
+  font-size:12px;
+
+  color:rgba(255,255,255,0.25);
+
+  letter-spacing:1px;
+
+  user-select:none;
+
+  pointer-events:none;
+
+  z-index:9999;
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- TOPBAR -->
+
+<div class="topbar">
+
+  <div class="title">
+    TAT SSB Simulator
+  </div>
+
+  <div class="controls">
+
+    <button id="startBtn">
+      Start Test
+    </button>
+
+    <button id="skipBtn">
+      Skip Timer
+    </button>
+
+    <button id="stopBtn">
+      Stop Test
+    </button>
+
+  </div>
+
+</div>
+
+<!-- MAIN -->
+
+<div class="main">
+
+  <!-- LEFT -->
+
+  <div class="viewer">
+
+    <div class="viewerMessage" id="viewerMessage">
+      READY TO START TEST
+    </div>
+
+    <canvas id="pdfCanvas"></canvas>
+
+  </div>
+
+  <!-- RIGHT -->
+
+  <div class="sidebar">
+
+    <div class="statusCard">
+
+      <div class="statusTitle">
+        Current Status
+      </div>
+
+      <div class="statusValue" id="status">
+        Waiting...
+      </div>
+
+    </div>
+
+    <div class="statusCard">
+
+      <div class="statusTitle">
+        Timer
+      </div>
+
+      <div class="timerBox" id="bigTimer">
+        00:00
+      </div>
+
+    </div>
+
+    <div class="statusCard">
+
+      <div class="statusTitle">
+        Progress
+      </div>
+
+      <div class="statusValue" id="pictureCount">
+        Picture 0 / 12
+      </div>
+
+    </div>
+
+    <button class="menuBtn" id="toggleLogBtn">
+      Open Review Menu
+    </button>
+
+    <div id="reviewContainer"></div>
+
+  </div>
+
+</div>
+
+<div id="watermark">
+  made by rhythm chauhan
+</div>
+
+<script>
+
+/* =========================
+   PDF LOCATION
+========================= */
+
+const PDF_PATH = "tat.pdf";
+
+/* ========================= */
+
+let pdfDoc = null;
+let totalPages = 0;
+
+let usedPages = [];
+
+let skipRequested = false;
+let stopRequested = false;
+let testRunning = false;
+let testCompletedOnce = false;
+let reviewMenuOpen = false;
+
+const canvas = document.getElementById("pdfCanvas");
+const ctx = canvas.getContext("2d");
+
+const viewerMessage = document.getElementById("viewerMessage");
+
+const statusDisplay = document.getElementById("status");
+const pictureCount = document.getElementById("pictureCount");
+const bigTimer = document.getElementById("bigTimer");
+
+const reviewContainer = document.getElementById("reviewContainer");
+
+/* =========================
+   LOAD PDF
+========================= */
+
+async function loadPDF(){
+
+  try{
+
+    const loadingTask = pdfjsLib.getDocument(PDF_PATH);
+
+    pdfDoc = await loadingTask.promise;
+
+    totalPages = pdfDoc.numPages;
+
+    viewerMessage.innerText = "TEST READY";
+
+    statusDisplay.innerText = "PDF Loaded";
+
+  }
+  catch(error){
+
+    viewerMessage.innerText = "PDF NOT FOUND";
+
+    statusDisplay.innerText = "Missing PDF";
+
+    console.error(error);
+
+  }
+
+}
+
+loadPDF();
+
+/* =========================
+   BEEP
+========================= */
+
+function beep(){
+
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+  const oscillator = audioCtx.createOscillator();
+
+  const gainNode = audioCtx.createGain();
+
+  oscillator.connect(gainNode);
+
+  gainNode.connect(audioCtx.destination);
+
+  oscillator.frequency.value = 700;
+
+  oscillator.start();
+
+  gainNode.gain.exponentialRampToValueAtTime(
+    0.0001,
+    audioCtx.currentTime + 0.5
+  );
+
+  oscillator.stop(audioCtx.currentTime + 0.5);
+
+}
+
+/* =========================
+   TIMER
+========================= */
+
+async function countdown(seconds){
+
+  skipRequested = false;
+
+  return new Promise((resolve)=>{
+
+    function updateTimer(){
+
+      if(stopRequested){
+
+        clearInterval(interval);
+
+        resolve("stopped");
+
+        return;
+      }
+
+      let mins = Math.floor(seconds / 60);
+      let secs = seconds % 60;
+
+      mins = mins < 10 ? "0" + mins : mins;
+      secs = secs < 10 ? "0" + secs : secs;
+
+      bigTimer.innerText = `${mins}:${secs}`;
+
+      if(skipRequested){
+
+        clearInterval(interval);
+
+        resolve("skipped");
+
+        return;
+      }
+
+      if(seconds <= 0){
+
+        clearInterval(interval);
+
+        resolve("done");
+
+        return;
+      }
+
+      seconds--;
+
+    }
+
+    updateTimer();
+
+    const interval = setInterval(updateTimer,1000);
+
+  });
+
+}
+
+/* =========================
+   RANDOM PAGE
+========================= */
+
+function getRandomPage(){
+
+  let page;
+
+  do{
+
+    page = Math.floor(Math.random() * totalPages) + 1;
+
+  }
+  while(usedPages.includes(page));
+
+  usedPages.push(page);
+
+  return page;
+
+}
+
+/* =========================
+   RENDER PAGE
+========================= */
+
+async function renderPage(pageNum){
+
+  const page = await pdfDoc.getPage(pageNum);
+
+  const viewport = page.getViewport({scale:1.7});
+
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  await page.render({
+    canvasContext:ctx,
+    viewport:viewport
+  }).promise;
+
+}
+
+/* =========================
+   CLEAR CANVAS
+========================= */
+
+function clearCanvas(){
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  canvas.width = 0;
+  canvas.height = 0;
+
+}
+
+/* =========================
+   SAVE REVIEW
+========================= */
+
+async function saveReview(pageNum,picNo){
+
+  const tempCanvas = document.createElement("canvas");
+
+  const tempCtx = tempCanvas.getContext("2d");
+
+  const page = await pdfDoc.getPage(pageNum);
+
+  const viewport = page.getViewport({scale:0.5});
+
+  tempCanvas.width = viewport.width;
+  tempCanvas.height = viewport.height;
+
+  await page.render({
+    canvasContext:tempCtx,
+    viewport:viewport
+  }).promise;
+
+  const card = document.createElement("div");
+
+  card.className = "logCard";
+
+  const title = document.createElement("p");
+
+  title.innerText = "Picture " + picNo;
+
+  const img = document.createElement("img");
+
+  img.src = tempCanvas.toDataURL();
+
+  img.className = "log-image";
+
+  /* CLICK IMAGE -> SHOW ON MAIN PDF CANVAS */
+
+  img.addEventListener("click", async ()=>{
+
+    if(testRunning) return;
+
+    viewerMessage.style.display = "none";
+
+    await renderPage(pageNum);
+
+    statusDisplay.innerText =
+      "Reviewing Picture " + picNo;
+
+    pictureCount.innerText =
+      `Picture ${picNo} / 12`;
+
+  });
+
+  card.appendChild(title);
+
+  card.appendChild(img);
+
+  reviewContainer.appendChild(card);
+
+}
+
+/* =========================
+   REVIEW MENU
+========================= */
+
+document.getElementById("toggleLogBtn")
+.addEventListener("click", ()=>{
+
+  if(!testCompletedOnce){
+
+    alert(
+      "Complete at least one test to unlock Review Menu"
+    );
+
+    return;
+
+  }
+
+  if(testRunning){
+
+    alert(
+      "Review Menu Locked During Test"
+    );
+
+    return;
+
+  }
+
+  const btn = document.getElementById("toggleLogBtn");
+
+  if(reviewMenuOpen){
+
+    reviewContainer.style.display = "none";
+
+    reviewMenuOpen = false;
+
+    btn.innerText = "Open Review Menu";
+
+  }
+  else{
+
+    reviewContainer.style.display = "flex";
+
+    reviewMenuOpen = true;
+
+    btn.innerText = "Close Review Menu";
+
+  }
+
+});
+
+/* =========================
+   SKIP BUTTON
+========================= */
+
+document.getElementById("skipBtn")
+.addEventListener("click", ()=>{
+
+  skipRequested = true;
+
+});
+
+/* =========================
+   STOP BUTTON
+========================= */
+
+document.getElementById("stopBtn")
+.addEventListener("click", ()=>{
+
+  if(!testRunning) return;
+
+  stopRequested = true;
+
+});
+
+/* =========================
+   START TEST
+========================= */
+
+document.getElementById("startBtn")
+.addEventListener("click", async ()=>{
+
+  if(!pdfDoc){
+
+    alert("PDF NOT LOADED");
+
+    return;
+
+  }
+
+  document.documentElement.requestFullscreen();
+
+  testRunning = true;
+
+  stopRequested = false;
+
+  usedPages = [];
+
+  reviewContainer.innerHTML = "";
+
+  reviewContainer.style.display = "none";
+
+  reviewMenuOpen = false;
+
+  document.getElementById("toggleLogBtn").innerText = "Open Review Menu";
+
+  pictureCount.innerText = "Picture 1 / 12";
+
+  statusDisplay.innerText = "Get Ready";
+
+  viewerMessage.style.display = "flex";
+
+  viewerMessage.innerText = "GET READY";
+
+  clearCanvas();
+
+  let result = await countdown(5);
+
+  if(result === "stopped"){
+
+    stopTest();
+
+    return;
+
+  }
+
+  /* 11 PICTURES */
+
+  for(let i=1;i<=11;i++){
+
+    pictureCount.innerText =
+      `Picture ${i} / 12`;
+
+    const pageNum = getRandomPage();
+
+    beep();
+
+    viewerMessage.style.display = "none";
+
+    await renderPage(pageNum);
+
+    await saveReview(pageNum,i);
+
+    statusDisplay.innerText =
+      "Observe Picture";
+
+    result = await countdown(30);
+
+    if(result === "stopped"){
+
+      stopTest();
+
+      return;
+
+    }
+
+    clearCanvas();
+
+    viewerMessage.style.display = "flex";
+
+    viewerMessage.innerText =
+      "WRITE YOUR STORY";
+
+    statusDisplay.innerText =
+      "Write Story";
+
+    result = await countdown(240);
+
+    if(result === "stopped"){
+
+      stopTest();
+
+      return;
+
+    }
+
+  }
+
+  /* BLANK SLIDE */
+
+  pictureCount.innerText =
+    "Picture 12 / 12";
+
+  clearCanvas();
+
+  beep();
+
+  viewerMessage.style.display = "flex";
+
+  viewerMessage.innerText =
+    "BLANK SLIDE";
+
+  statusDisplay.innerText =
+    "Blank Slide";
+
+  result = await countdown(30);
+
+  if(result === "stopped"){
+
+    stopTest();
+
+    return;
+
+  }
+
+  /* FINAL STORY */
+
+  viewerMessage.innerText =
+    "WRITE YOUR STORY";
+
+  statusDisplay.innerText =
+    "Write Story";
+
+  result = await countdown(240);
+
+  if(result === "stopped"){
+
+    stopTest();
+
+    return;
+
+  }
+
+  /* COMPLETE */
+
+  viewerMessage.innerText =
+    "TAT COMPLETED";
+
+  statusDisplay.innerText =
+    "Completed";
+
+  bigTimer.innerText = "DONE";
+
+  testRunning = false;
+
+  testCompletedOnce = true;
+
+  if(document.fullscreenElement){
+
+    document.exitFullscreen();
+
+  }
+
+});
+
+/* =========================
+   STOP TEST
+========================= */
+
+function stopTest(){
+
+  testRunning = false;
+
+  testCompletedOnce = true;
+
+  reviewContainer.style.display = "none";
+
+  reviewMenuOpen = false;
+
+  document.getElementById("toggleLogBtn").innerText = "Open Review Menu";
+
+  clearCanvas();
+
+  viewerMessage.style.display = "flex";
+
+  viewerMessage.innerText = "TEST STOPPED";
+
+  statusDisplay.innerText = "Test Stopped";
+
+  bigTimer.innerText = "STOP";
+
+  if(document.fullscreenElement){
+
+    document.exitFullscreen();
+
+  }
+
+}
+
+</script>
+
+</body>
+</html>
