@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://tat-ssb-simulator.vercel.app/sitemap.xml
