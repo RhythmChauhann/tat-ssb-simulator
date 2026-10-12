@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TAT SSB Simulator — Custom PDF</title>
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- Shared styles -->
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<!-- UPLOAD SCREEN -->
+<div class="uploadScreen" id="uploadScreen">
+  <h1>TAT SSB Simulator</h1>
+  <p>Upload a TAT PDF (12+ pages) to begin</p>
+  <div class="uploadZone" id="uploadZone">
+    <svg class="uploadIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/>
+      <line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    <h2>Drag & drop PDF here</h2>
+    <p>or click to browse</p>
+    <input type="file" id="pdfInput" accept=".pdf">
+    <button class="uploadBtn" id="browseBtn">Choose File</button>
+    <div class="uploadError" id="uploadError"></div>
+  </div>
+  <!-- RANGE INPUT (shown when PDF has >11 pages) -->
+  <div class="rangeScreen hidden" id="rangeScreen">
+    <h2>Select 11 pages to use</h2>
+    <p class="rangeHint">Format: 1-5,7,10-12 &nbsp;|&nbsp; Pages available: 1&ndash;<span id="maxPage">12</span></p>
+    <input type="text" id="rangeInput" placeholder="e.g. 1-11" spellcheck="false">
+    <button class="uploadBtn" id="applyRangeBtn">Apply & Start</button>
+    <div class="uploadError" id="rangeError"></div>
+  </div>
+</div>
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="title">TAT SSB Simulator</div>
+  <div class="controls">
+    <button id="startBtn">Start Test</button>
+    <button id="skipBtn">Skip Timer</button>
+    <button id="stopBtn">Stop Test</button>
+  </div>
+</div>
+<!-- MAIN -->
+<div class="main">
+  <!-- LEFT -->
+  <div class="viewer">
+    <div class="viewerMessage" id="viewerMessage">READY TO START TEST</div>
+    <canvas id="pdfCanvas"></canvas>
+  </div>
+  <!-- RIGHT -->
+  <div class="sidebar">
+    <div class="statusCard">
+      <div class="statusTitle">Current Status</div>
+      <div class="statusValue" id="status">Waiting for PDF...</div>
+    </div>
+    <div class="statusCard">
+      <div class="statusTitle">Timer</div>
+      <div class="timerBox" id="bigTimer">00:00</div>
+    </div>
+    <div class="statusCard">
+      <div class="statusTitle">Progress</div>
+      <div class="statusValue" id="pictureCount">Picture 0 / 12</div>
+    </div>
+    <button class="menuBtn" id="toggleLogBtn">Open Review Menu</button>
+    <div id="reviewContainer"></div>
+  </div>
+</div>
+<div id="watermark">made by rhythm chauhan</div>
+<!-- Shared core logic -->
+<script src="tat-core.js"></script>
+<script>
+const uploadScreen = document.getElementById("uploadScreen");
+const uploadZone = document.getElementById("uploadZone");
+const pdfInput = document.getElementById("pdfInput");
+const browseBtn = document.getElementById("browseBtn");
+const uploadError = document.getElementById("uploadError");
+const rangeScreen = document.getElementById("rangeScreen");
+const rangeInput = document.getElementById("rangeInput");
+const applyRangeBtn = document.getElementById("applyRangeBtn");
+const rangeError = document.getElementById("rangeError");
+const maxPageEl = document.getElementById("maxPage");
+
+browseBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  pdfInput.click();
+});
+
+uploadZone.addEventListener("click", () => pdfInput.click());
+
+uploadZone.addEventListener("dragover", (e) => {
+  e.preventDefault();
+  uploadZone.classList.add("dragover");
+});
+
+uploadZone.addEventListener("dragleave", () => {
+  uploadZone.classList.remove("dragover");
+});
+
+uploadZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  uploadZone.classList.remove("dragover");
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === "application/pdf") {
+    handleFile(file);
+  } else {
+    showError("Please drop a valid PDF file");
+  }
+});
+
+pdfInput.addEventListener("change", () => {
+  const file = pdfInput.files[0];
+  if (file) handleFile(file);
+});
+
+function showError(msg) {
+  uploadError.textContent = msg;
+  uploadError.classList.add("show");
+}
+
+function showRangeError(msg) {
+  rangeError.textContent = msg;
+  rangeError.classList.add("show");
+}
+
+function parseRanges(str, max) {
+  const pages = new Set();
+  for (const part of str.split(',')) {
+    const [a, b] = part.split('-').map(Number);
+    if (isNaN(a)) continue;
+    const end = isNaN(b) ? a : b;
+    for (let p = a; p <= end; p++) if (p >= 1 && p <= max) pages.add(p);
+  }
+  return [...pages].sort((a, b) => a - b);
+}
+
+async function handleFile(file) {
+  uploadError.classList.remove("show");
+  statusDisplay.innerText = "Loading PDF...";
+  const ok = await initTAT(file);
+  if (!ok) {
+    showError("Failed to load PDF. Ensure it has 12+ pages.");
+    return;
+  }
+  // PDF loaded - check if we need range selection
+  if (totalPages > 11) {
+    maxPageEl.textContent = totalPages;
+    uploadZone.style.display = "none";
+    rangeScreen.classList.remove("hidden");
+    rangeInput.focus();
+  } else {
+    // Use all pages (1..totalPages), pad with blanks if needed
+    const pages = Array.from({ length: 11 }, (_, i) => (i < totalPages ? i + 1 : 1));
+    setSelectedPages(pages);
+    uploadScreen.classList.add("hidden");
+  }
+}
+
+applyRangeBtn.addEventListener("click", () => {
+  rangeError.classList.remove("show");
+  const parsed = parseRanges(rangeInput.value, totalPages);
+  if (parsed.length !== 11) {
+    showRangeError(`Need exactly 11 pages, got ${parsed.length}.`);
+    return;
+  }
+  // Check for duplicates (parseRanges uses Set, so this shouldn't happen)
+  if (new Set(parsed).size !== 11) {
+    showRangeError("Duplicate pages detected.");
+    return;
+  }
+  setSelectedPages(parsed);
+  uploadScreen.classList.add("hidden");
+});
+
+rangeInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") applyRangeBtn.click();
+});
+</script>
+</body>
+</html>

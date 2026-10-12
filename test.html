@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TAT Test</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="testContainer" id="testContainer">
+  <header class="testHeader">
+    <h1 id="testTitle">TAT Test</h1>
+    <span class="badge" id="testBadge">Loading...</span>
+  </header>
+
+  <main class="main">
+    <div class="viewer">
+      <div class="viewerMessage" id="viewerMessage">LOADING TEST...</div>
+      <canvas id="pdfCanvas"></canvas>
+    </div>
+    <div class="sidebar">
+      <div class="statusCard">
+        <div class="statusTitle">Current Status</div>
+        <div class="statusValue" id="status">Loading...</div>
+      </div>
+      <div class="statusCard">
+        <div class="statusTitle">Timer</div>
+        <div class="timerBox" id="bigTimer">00:00</div>
+      </div>
+      <div class="statusCard">
+        <div class="statusTitle">Progress</div>
+        <div class="statusValue" id="pictureCount">Picture 0 / 12</div>
+      </div>
+      <button class="menuBtn" id="toggleLogBtn">Open Review Menu</button>
+      <div id="reviewContainer"></div>
+    </div>
+  </main>
+  <div id="watermark">made by rhythm chauhan</div>
+</div>
+
+<div class="errorScreen hidden" id="errorScreen">
+  <div class="errorBox">
+    <h2 id="errorTitle">Test Not Found</h2>
+    <p id="errorMsg">This test link is invalid or has expired.</p>
+    <a href="/" class="adminBtn">Create New Test</a>
+  </div>
+</div>
+
+<script src="tat-core.js"></script>
+<script>
+const testContainer = document.getElementById("testContainer");
+const errorScreen = document.getElementById("errorScreen");
+const testTitle = document.getElementById("testTitle");
+const testBadge = document.getElementById("testBadge");
+const errorTitle = document.getElementById("errorTitle");
+const errorMsg = document.getElementById("errorMsg");
+
+const urlParams = new URLSearchParams(window.location.search);
+const testId = urlParams.get("id");
+
+if (!testId) {
+  showError("Invalid Link", "No test ID provided.");
+} else {
+  loadTest(testId);
+}
+
+async function loadTest(id) {
+  try {
+    const res = await fetch(`/api/config/${id}`);
+    if (!res.ok) {
+      const data = await res.json();
+      if (res.status === 404) showError("Test Not Found", "This test does not exist.");
+      else if (res.status === 410) showError("Test Expired", data.error || "This test has expired (3-day limit).");
+      else throw new Error(data.error || "Failed to load test");
+      return;
+    }
+    const config = await res.json();
+    testTitle.textContent = config.title || "TAT Test";
+    testBadge.textContent = "Ready";
+    testBadge.classList.add("ready");
+    errorScreen.classList.add("hidden");
+    testContainer.style.display = "flex";
+
+    // Initialize TAT with selected pages
+    if (config.ranges && config.ranges.length > 0) {
+      window.setSelectedPages(config.ranges);
+    }
+    const ok = await window.initTAT(config.pdfUrl);
+    if (!ok) throw new Error("Failed to load PDF");
+  } catch (err) {
+    showError("Error", err.message);
+  }
+}
+
+function showError(title, msg) {
+  testContainer.style.display = "none";
+  errorScreen.classList.remove("hidden");
+  errorTitle.textContent = title;
+  errorMsg.textContent = msg;
+}
+</script>
+</body>
+</html>

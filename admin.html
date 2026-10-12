@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TAT Admin — Create Test</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="adminContainer">
+  <header class="adminHeader">
+    <h1>TAT Admin Panel</h1>
+    <p>Create a timed TAT test with custom PDF & page ranges</p>
+  </header>
+
+  <main class="adminMain">
+    <!-- STEP 1: UPLOAD -->
+    <section class="adminCard" id="stepUpload">
+      <h2>Step 1: Upload PDF</h2>
+      <div class="uploadZone" id="uploadZone">
+        <svg class="uploadIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <h3>Drag & drop PDF here</h3>
+        <p>or click to browse (max 100MB)</p>
+        <input type="file" id="pdfInput" accept=".pdf">
+        <button class="adminBtn" id="browseBtn">Choose File</button>
+        <div class="uploadError" id="uploadError"></div>
+      </div>
+      <div class="fileInfo hidden" id="fileInfo"></div>
+    </section>
+
+    <!-- STEP 2: RANGES -->
+    <section class="adminCard hidden" id="stepRanges">
+      <h2>Step 2: Select 11 Pages</h2>
+      <p class="rangeHint">Format: <code>1-5,7,10-12</code> &nbsp;|&nbsp; Pages available: 1&ndash;<span id="maxPage">12</span></p>
+      <input type="text" id="rangeInput" placeholder="e.g. 1-11" spellcheck="false">
+      <div class="rangePreview hidden" id="rangePreview"></div>
+      <div class="uploadError" id="rangeError"></div>
+      <div class="adminActions">
+        <button class="adminBtn secondary" id="backBtn">Back</button>
+        <button class="adminBtn" id="nextBtn">Next</button>
+      </div>
+    </section>
+
+    <!-- STEP 3: CREATE -->
+    <section class="adminCard hidden" id="stepCreate">
+      <h2>Step 3: Test Details</h2>
+      <input type="text" id="testTitle" placeholder="Test title (optional)" maxlength="60">
+      <div class="summary" id="summary"></div>
+      <div class="uploadError" id="createError"></div>
+      <div class="adminActions">
+        <button class="adminBtn secondary" id="backBtn2">Back</button>
+        <button class="adminBtn primary" id="createBtn">Create Test</button>
+      </div>
+    </section>
+
+    <!-- RESULT -->
+    <section class="adminCard hidden" id="stepResult">
+      <h2>Test Created</h2>
+      <div class="resultBox">
+        <label>Share this link:</label>
+        <div class="linkRow">
+          <input type="text" id="resultLink" readonly>
+          <button class="adminBtn small" id="copyBtn">Copy</button>
+        </div>
+        <p class="expiry">Expires in 3 days</p>
+      </div>
+      <div class="adminActions">
+        <button class="adminBtn" id="newTestBtn">Create Another</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script src="tat-core.js"></script>
+<script>
+// State
+let pdfFile = null;
+let pdfUrl = null;
+let totalPages = 0;
+let selectedRanges = [];
+
+const uploadZone = document.getElementById("uploadZone");
+const pdfInput = document.getElementById("pdfInput");
+const browseBtn = document.getElementById("browseBtn");
+const uploadError = document.getElementById("uploadError");
+const fileInfo = document.getElementById("fileInfo");
+const rangeInput = document.getElementById("rangeInput");
+const rangeError = document.getElementById("rangeError");
+const rangePreview = document.getElementById("rangePreview");
+const maxPageEl = document.getElementById("maxPage");
+const testTitle = document.getElementById("testTitle");
+const createError = document.getElementById("createError");
+const summary = document.getElementById("summary");
+const resultLink = document.getElementById("resultLink");
+const copyBtn = document.getElementById("copyBtn");
+
+function showError(el, msg) { el.textContent = msg; el.classList.add("show"); }
+function hideError(el) { el.classList.remove("show"); }
+function show(el) { el.classList.remove("hidden"); }
+function hide(el) { el.classList.add("hidden"); }
+function step(stepId) {
+  document.querySelectorAll(".adminCard").forEach(el => hide(el));
+  show(document.getElementById(stepId));
+}
+
+function parseRanges(str, max) {
+  const pages = new Set();
+  for (const part of str.split(',')) {
+    const [a, b] = part.split('-').map(Number);
+    if (isNaN(a)) continue;
+    const end = isNaN(b) ? a : b;
+    for (let p = a; p <= end; p++) if (p >= 1 && p <= max) pages.add(p);
+  }
+  return [...pages].sort((a, b) => a - b);
+}
+
+function previewRanges() {
+  const parsed = parseRanges(rangeInput.value, totalPages);
+  if (parsed.length === 0) { hide(rangePreview); return; }
+  rangePreview.innerHTML = "Selected: " + parsed.map(p => `<span class="pageTag">${p}</span>`).join("");
+  show(rangePreview);
+  if (parsed.length === 11) { hideError(rangeError); return true; }
+  showError(rangeError, `Need exactly 11 pages, got ${parsed.length}.`);
+  return false;
+}
+
+browseBtn.addEventListener("click", (e) => { e.stopPropagation(); pdfInput.click(); });
+uploadZone.addEventListener("click", () => pdfInput.click());
+uploadZone.addEventListener("dragover", (e) => { e.preventDefault(); uploadZone.classList.add("dragover"); });
+uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
+uploadZone.addEventListener("drop", (e) => {
+  e.preventDefault(); uploadZone.classList.remove("dragover");
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === "application/pdf") handleFile(file);
+  else showError(uploadError, "Please drop a valid PDF file");
+});
+pdfInput.addEventListener("change", () => { const file = pdfInput.files[0]; if (file) handleFile(file); });
+
+async function handleFile(file) {
+  hideError(uploadError);
+  if (file.size > 100 * 1024 * 1024) { showError(uploadError, "File too large (max 100MB)"); return; }
+  uploadZone.innerHTML = `<div class="loading">Uploading...</div>`;
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Upload failed");
+    pdfUrl = data.url;
+    // Get page count via PDF.js
+    const loadingTask = pdfjsLib.getDocument({ data: await file.arrayBuffer() });
+    const pdfDoc = await loadingTask.promise;
+    totalPages = pdfDoc.numPages;
+    maxPageEl.textContent = totalPages;
+    fileInfo.innerHTML = `<strong>${file.name}</strong> (${totalPages} pages, ${(file.size/1024/1024).toFixed(1)} MB)`;
+    show(fileInfo);
+    step("stepRanges");
+    rangeInput.focus();
+  } catch (err) {
+    showError(uploadError, err.message);
+    location.reload();
+  }
+}
+
+rangeInput.addEventListener("input", previewRanges);
+rangeInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && previewRanges()) document.getElementById("nextBtn").click(); });
+
+document.getElementById("nextBtn").addEventListener("click", () => {
+  if (!previewRanges()) return;
+  selectedRanges = parseRanges(rangeInput.value, totalPages);
+  summary.innerHTML = `
+    <strong>PDF:</strong> ${pdfUrl.split("/").pop()}<br>
+    <strong>Pages:</strong> ${selectedRanges.join(", ")}<br>
+    <strong>Title:</strong> ${testTitle.value || "(untitled)"}
+  `;
+  step("stepCreate");
+  testTitle.focus();
+});
+
+document.getElementById("backBtn").addEventListener("click", () => step("stepUpload"));
+document.getElementById("backBtn2").addEventListener("click", () => step("stepRanges"));
+
+document.getElementById("createBtn").addEventListener("click", async () => {
+  hideError(createError);
+  const title = testTitle.value.trim() || "Untitled Test";
+  const btn = document.getElementById("createBtn");
+  btn.disabled = true; btn.textContent = "Creating...";
+  try {
+    const res = await fetch("/api/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdfUrl, ranges: selectedRanges, title })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Create failed");
+    const link = `${location.origin}/test/${data.id}`;
+    resultLink.value = link;
+    step("stepResult");
+  } catch (err) {
+    showError(createError, err.message);
+    btn.disabled = false; btn.textContent = "Create Test";
+  }
+});
+
+copyBtn.addEventListener("click", async () => {
+  await navigator.clipboard.writeText(resultLink.value);
+  copyBtn.textContent = "Copied!";
+  setTimeout(() => copyBtn.textContent = "Copy", 1500);
+});
+
+document.getElementById("newTestBtn").addEventListener("click", () => location.reload());
+</script>
+</body>
+</html>
