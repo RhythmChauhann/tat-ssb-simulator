@@ -1,0 +1,26 @@
+{
+  "name": "tat-ssb-simulator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "tat-core.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RhythmChauhann/tat-ssb-simulator.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/RhythmChauhann/tat-ssb-simulator/issues"
+  },
+  "homepage": "https://github.com/RhythmChauhann/tat-ssb-simulator#readme",
+  "type": "module",
+  "dependencies": {
+    "@vercel/blob": "^2.8.1",
+    "@vercel/kv": "^3.0.0",
+    "nanoid": "^6.0.2"
+  }
+}
