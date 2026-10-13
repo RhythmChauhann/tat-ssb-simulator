@@ -4,7 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TAT Admin — Create Test</title>
+<!-- PDF.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<!-- Shared styles -->
 <link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📝</text></svg>">
 </head>
 <body>
 <div class="adminContainer">
@@ -14,9 +18,10 @@
   </header>
 
   <main class="adminMain">
-    <!-- STEP 1: UPLOAD -->
+    <!-- UPLOAD & RANGE -->
     <section class="adminCard" id="stepUpload">
       <h2>Step 1: Upload PDF</h2>
+      <p class="hint">PDF must have at least 11 pages</p>
       <div class="uploadZone" id="uploadZone">
         <svg class="uploadIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -30,31 +35,21 @@
         <div class="uploadError" id="uploadError"></div>
       </div>
       <div class="fileInfo hidden" id="fileInfo"></div>
-    </section>
-
-    <!-- STEP 2: RANGES -->
-    <section class="adminCard hidden" id="stepRanges">
-      <h2>Step 2: Select 11 Pages</h2>
-      <p class="rangeHint">Format: <code>1-5,7,10-12</code> &nbsp;|&nbsp; Pages available: 1&ndash;<span id="maxPage">12</span></p>
-      <input type="text" id="rangeInput" placeholder="e.g. 1-11" spellcheck="false">
-      <div class="rangePreview hidden" id="rangePreview"></div>
-      <div class="uploadError" id="rangeError"></div>
-      <div class="adminActions">
-        <button class="adminBtn secondary" id="backBtn">Back</button>
-        <button class="adminBtn" id="nextBtn">Next</button>
+      <div class="rangeSection hidden" id="rangeSection">
+        <h3>Select 11 Pages</h3>
+        <p class="rangeHint">Format: <code>1-5,7,10-12</code> &nbsp;|&nbsp; Pages available: 1&ndash;<span id="maxPage">12</span></p>
+        <input type="text" id="rangeInput" placeholder="e.g. 1-11" spellcheck="false">
+        <div class="rangePreview hidden" id="rangePreview"></div>
+        <div class="uploadError" id="rangeError"></div>
       </div>
     </section>
 
-    <!-- STEP 3: CREATE -->
+    <!-- TEST DETAILS -->
     <section class="adminCard hidden" id="stepCreate">
-      <h2>Step 3: Test Details</h2>
+      <h2>Step 2: Test Details</h2>
       <input type="text" id="testTitle" placeholder="Test title (optional)" maxlength="60">
       <div class="summary" id="summary"></div>
       <div class="uploadError" id="createError"></div>
-      <div class="adminActions">
-        <button class="adminBtn secondary" id="backBtn2">Back</button>
-        <button class="adminBtn primary" id="createBtn">Create Test</button>
-      </div>
     </section>
 
     <!-- RESULT -->
@@ -75,9 +70,7 @@
   </main>
 </div>
 
-<script src="tat-core.js"></script>
 <script>
-// State
 let pdfFile = null;
 let pdfUrl = null;
 let totalPages = 0;
@@ -88,6 +81,7 @@ const pdfInput = document.getElementById("pdfInput");
 const browseBtn = document.getElementById("browseBtn");
 const uploadError = document.getElementById("uploadError");
 const fileInfo = document.getElementById("fileInfo");
+const rangeSection = document.getElementById("rangeSection");
 const rangeInput = document.getElementById("rangeInput");
 const rangeError = document.getElementById("rangeError");
 const rangePreview = document.getElementById("rangePreview");
@@ -120,7 +114,7 @@ function parseRanges(str, max) {
 
 function previewRanges() {
   const parsed = parseRanges(rangeInput.value, totalPages);
-  if (parsed.length === 0) { hide(rangePreview); return; }
+  if (parsed.length === 0) { hide(rangePreview); return false; }
   rangePreview.innerHTML = "Selected: " + parsed.map(p => `<span class="pageTag">${p}</span>`).join("");
   show(rangePreview);
   if (parsed.length === 11) { hideError(rangeError); return true; }
@@ -145,51 +139,83 @@ async function handleFile(file) {
   if (file.size > 100 * 1024 * 1024) { showError(uploadError, "File too large (max 100MB)"); return; }
   uploadZone.innerHTML = `<div class="loading">Uploading...</div>`;
   try {
-    const formData = new FormData();
-    formData.append("file", file);
-    const res = await fetch("/api/upload", { method: "POST", body: formData });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Upload failed");
-    pdfUrl = data.url;
-    // Get page count via PDF.js
+    // Get page count via PDF.js only - no upload yet
     const loadingTask = pdfjsLib.getDocument({ data: await file.arrayBuffer() });
     const pdfDoc = await loadingTask.promise;
     totalPages = pdfDoc.numPages;
-    maxPageEl.textContent = totalPages;
+    
+    // Validate minimum 11 pages
+    if (totalPages < 11) {
+      showError(uploadError, `PDF must have at least 11 pages, got ${totalPages}.`);
+      totalPages = 0;
+      return;
+    }
+    
     fileInfo.innerHTML = `<strong>${file.name}</strong> (${totalPages} pages, ${(file.size/1024/1024).toFixed(1)} MB)`;
     show(fileInfo);
-    step("stepRanges");
-    rangeInput.focus();
+    
+    // Show range selection only if >11 pages
+    if (totalPages > 11) {
+      show(rangeSection);
+      maxPageEl.textContent = totalPages;
+      rangeInput.focus();
+    } else {
+      // Exactly 11 pages - auto-select all, no range needed
+      hide(rangeSection);
+      // Auto-create ranges 1-11
+      selectedRanges = [...Array(11).keys()].map(i => i + 1);
+      summary.innerHTML = `
+        <strong>PDF:</strong> ${file.name}<br>
+        <strong>Pages:</strong> 1-11 (auto-selected, exactly 11 pages)<br>
+        <strong>Title:</strong> ${testTitle.value || "(untitled)"}
+      `;
+      step("stepCreate");
+      testTitle.focus();
+    }
   } catch (err) {
     showError(uploadError, err.message);
-    location.reload();
+    totalPages = 0;
   }
 }
 
 rangeInput.addEventListener("input", previewRanges);
-rangeInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && previewRanges()) document.getElementById("nextBtn").click(); });
+rangeInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && previewRanges()) step("stepCreate"); });
 
+// Step 2 → Step 3
 document.getElementById("nextBtn").addEventListener("click", () => {
   if (!previewRanges()) return;
-  selectedRanges = parseRanges(rangeInput.value, totalPages);
+  // Build summary with selected ranges
+  const rangeStr = selectedRanges.length === 11 ? "1-11" : selectedRanges.join(", ");
   summary.innerHTML = `
-    <strong>PDF:</strong> ${pdfUrl.split("/").pop()}<br>
-    <strong>Pages:</strong> ${selectedRanges.join(", ")}<br>
+    <strong>PDF:</strong> ${pdfFile.name}<br>
+    <strong>Pages:</strong> ${rangeStr}<br>
     <strong>Title:</strong> ${testTitle.value || "(untitled)"}
   `;
   step("stepCreate");
   testTitle.focus();
 });
 
+// Back buttons
 document.getElementById("backBtn").addEventListener("click", () => step("stepUpload"));
-document.getElementById("backBtn2").addEventListener("click", () => step("stepRanges"));
+document.getElementById("backBtn2").addEventListener("click", () => step("stepUpload"));
 
+// Create test - UPLOAD TO BLOB + CREATE
 document.getElementById("createBtn").addEventListener("click", async () => {
   hideError(createError);
   const title = testTitle.value.trim() || "Untitled Test";
   const btn = document.getElementById("createBtn");
   btn.disabled = true; btn.textContent = "Creating...";
+  
   try {
+    // Upload PDF to Vercel Blob
+    const formData = new FormData();
+    formData.append("file", pdfFile);
+    const uploadRes = await fetch("/api/upload", { method: "POST", body: formData });
+    const uploadData = await uploadRes.json();
+    if (!uploadRes.ok) throw new Error(uploadData.error || "Upload failed");
+    pdfUrl = uploadData.url;
+    
+    // Create test record in KV
     const res = await fetch("/api/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -197,6 +223,7 @@ document.getElementById("createBtn").addEventListener("click", async () => {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Create failed");
+    
     const link = `${location.origin}/test/${data.id}`;
     resultLink.value = link;
     step("stepResult");

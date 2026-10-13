@@ -15,7 +15,8 @@ export default async function handler(req, res) {
     for await (const chunk of req) chunks.push(chunk);
     const buffer = Buffer.concat(chunks);
 
-    const boundary = contentType.split('boundary=')[1];
+    const boundaryMatch = contentType.match(/boundary=(.+)/);
+    const boundary = boundaryMatch ? boundaryMatch[1].replace(/["']/g, '').split(';')[0].trim() : '';
     if (!boundary) return res.status(400).json({ error: 'Missing boundary' });
 
     const parts = parseMultipart(buffer, boundary);
